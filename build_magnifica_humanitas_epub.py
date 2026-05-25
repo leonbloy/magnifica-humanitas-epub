@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import argparse
 import html as html_lib
 import re
 import shutil
@@ -16,18 +17,90 @@ from lxml import etree, html
 from PIL import Image, ImageDraw, ImageFont
 
 
-SOURCE_URL = "https://www.vatican.va/content/leo-xiv/en/encyclicals/documents/20260515-magnifica-humanitas.html"
-SOURCE_HTML = Path("vatican-magnifica-humanitas.source.html")
-BUILD_DIR = Path("build/magnifica-humanitas-epub")
-OUTPUT_EPUB = Path("Magnifica Humanitas - Pope Leo XIV.epub")
+LANGUAGE_CONFIGS = {
+    "en": {
+        "source_url": "https://www.vatican.va/content/leo-xiv/en/encyclicals/documents/20260515-magnifica-humanitas.html",
+        "source_html": Path("vatican-magnifica-humanitas.source.html"),
+        "build_dir": Path("build/magnifica-humanitas-epub-en"),
+        "output_epub": Path("Magnifica Humanitas - Pope Leo XIV.epub"),
+        "title": "Magnifica Humanitas",
+        "subtitle": "On Safeguarding the Human Person in the Time of Artificial Intelligence",
+        "author": "Pope Leo XIV",
+        "publisher": "The Holy See",
+        "date": "2026-05-15",
+        "cover_kicker": "ENCYCLICAL LETTER",
+        "cover_date": "15 MAY 2026",
+        "title_page_label": "ENCYCLICAL LETTER",
+        "title_page_nav": "Title Page",
+        "contents_label": "Contents",
+        "notes_label": "Notes",
+        "start_anchors": ("INTRODUCTION_",),
+        "top_level_pattern": r"^(INTRODUCTION|CHAPTER [A-Z]+|CONCLUSION)$",
+    },
+    "fr": {
+        "source_url": "https://www.vatican.va/content/leo-xiv/fr/encyclicals/documents/20260515-magnifica-humanitas.html",
+        "source_html": Path("vatican-magnifica-humanitas.fr.source.html"),
+        "build_dir": Path("build/magnifica-humanitas-epub-fr"),
+        "output_epub": Path("Magnifica Humanitas - Pape Leon XIV (fr).epub"),
+        "title": "Magnifica Humanitas",
+        "subtitle": "Sur la protection de la personne humaine à l’ère de l’intelligence artificielle",
+        "author": "Pape Léon XIV",
+        "publisher": "Le Saint-Siège",
+        "date": "2026-05-15",
+        "cover_kicker": "LETTRE ENCYCLIQUE",
+        "cover_date": "15 MAI 2026",
+        "title_page_label": "LETTRE ENCYCLIQUE",
+        "title_page_nav": "Page de titre",
+        "contents_label": "Sommaire",
+        "notes_label": "Notes",
+        "start_anchors": ("INTRODUCTION",),
+        "top_level_pattern": r"^(INTRODUCTION|Chapitre\s+\d+|CONCLUSION)$",
+    },
+}
 
-TITLE = "Magnifica Humanitas"
-FULL_TITLE = "Encyclical Letter of His Holiness Leo XIV Magnifica Humanitas"
-SUBTITLE = "On Safeguarding the Human Person in the Time of Artificial Intelligence"
-AUTHOR = "Pope Leo XIV"
-PUBLISHER = "The Holy See"
-DATE = "2026-05-15"
-LANG = "en"
+SOURCE_URL = ""
+SOURCE_HTML = Path()
+BUILD_DIR = Path()
+OUTPUT_EPUB = Path()
+
+TITLE = ""
+SUBTITLE = ""
+AUTHOR = ""
+PUBLISHER = ""
+DATE = ""
+LANG = ""
+COVER_KICKER = ""
+COVER_DATE = ""
+TITLE_PAGE_LABEL = ""
+TITLE_PAGE_NAV = ""
+CONTENTS_LABEL = ""
+NOTES_LABEL = ""
+START_ANCHORS: tuple[str, ...] = ()
+TOP_LEVEL_PATTERN = re.compile("")
+
+
+def set_language(lang: str) -> None:
+    config = LANGUAGE_CONFIGS[lang]
+    globals().update(
+        SOURCE_URL=config["source_url"],
+        SOURCE_HTML=config["source_html"],
+        BUILD_DIR=config["build_dir"],
+        OUTPUT_EPUB=config["output_epub"],
+        TITLE=config["title"],
+        SUBTITLE=config["subtitle"],
+        AUTHOR=config["author"],
+        PUBLISHER=config["publisher"],
+        DATE=config["date"],
+        LANG=lang,
+        COVER_KICKER=config["cover_kicker"],
+        COVER_DATE=config["cover_date"],
+        TITLE_PAGE_LABEL=config["title_page_label"],
+        TITLE_PAGE_NAV=config["title_page_nav"],
+        CONTENTS_LABEL=config["contents_label"],
+        NOTES_LABEL=config["notes_label"],
+        START_ANCHORS=config["start_anchors"],
+        TOP_LEVEL_PATTERN=re.compile(str(config["top_level_pattern"]), re.IGNORECASE),
+    )
 
 
 def normspace(value: str) -> str:
@@ -83,7 +156,7 @@ def build_id_map(content: etree._Element) -> dict[str, str]:
 def extract_toc_levels(content: etree._Element, id_map: dict[str, str]) -> dict[str, int]:
     levels: dict[str, int] = {}
     for paragraph in content.xpath("./p"):
-        if paragraph.xpath('.//a[@name="INTRODUCTION_"]'):
+        if any(paragraph.xpath(f'.//a[@name="{anchor}"]') for anchor in START_ANCHORS):
             break
 
         for anchor in paragraph.xpath('.//a[@href and starts-with(@href, "#")]'):
@@ -96,7 +169,7 @@ def extract_toc_levels(content: etree._Element, id_map: dict[str, str]) -> dict[
             if not text:
                 continue
 
-            if re.match(r"^(INTRODUCTION|CHAPTER [A-Z]+|CONCLUSION)$", text):
+            if TOP_LEVEL_PATTERN.match(text):
                 level = 1
             elif any_ancestor_tag(anchor, "i"):
                 level = 3
@@ -173,7 +246,7 @@ def heading_from_paragraph(
     if not text or len(text) > 220:
         return None, None
 
-    is_heading = bool(paragraph.xpath(".//b")) or "text-align: center" in paragraph.get("style", "").lower()
+    is_heading = new_id in toc_levels or bool(paragraph.xpath(".//b")) or "text-align: center" in paragraph.get("style", "").lower()
     if not is_heading:
         return None, None
 
@@ -193,7 +266,7 @@ def build_content_fragments(content: etree._Element, id_map: dict[str, str], toc
     children = list(content)
     start_index = None
     for i, child in enumerate(children):
-        if isinstance(child.tag, str) and child.xpath('.//a[@name="INTRODUCTION_"]'):
+        if isinstance(child.tag, str) and any(child.xpath(f'.//a[@name="{anchor}"]') for anchor in START_ANCHORS):
             start_index = i
             break
     if start_index is None:
@@ -207,7 +280,12 @@ def build_content_fragments(content: etree._Element, id_map: dict[str, str], toc
         if not isinstance(child.tag, str):
             continue
 
-        footnote_paragraphs = child.xpath('.//p[contains(concat(" ", normalize-space(@class), " "), " MsoFootnoteText ")]')
+        footnote_paragraphs = []
+        if child.tag.lower() == "p" and child.xpath('.//a[starts-with(@name, "_ftn") and not(starts-with(@name, "_ftnref"))]'):
+            footnote_paragraphs.append(child)
+        footnote_paragraphs.extend(
+            child.xpath('.//p[contains(concat(" ", normalize-space(@class), " "), " MsoFootnoteText ") or .//a[starts-with(@name, "_ftn") and not(starts-with(@name, "_ftnref"))]]')
+        )
         if footnote_paragraphs:
             for paragraph in footnote_paragraphs:
                 cleaned = sanitize_element(paragraph, id_map)
@@ -297,7 +375,7 @@ def create_cover(path: Path) -> None:
     draw.rectangle((margin + 32, margin + 32, width - margin - 32, height - margin - 32), outline=gold, width=3)
 
     y = 360
-    y = draw_centered_lines(draw, ["ENCYCLICAL LETTER"], font(54), y, graphite, 18, width)
+    y = draw_centered_lines(draw, [COVER_KICKER], font(54), y, graphite, 18, width)
     y += 120
     y = draw_centered_lines(draw, ["MAGNIFICA", "HUMANITAS"], font(126, bold=True), y, burgundy, 34, width)
     y += 120
@@ -308,7 +386,7 @@ def create_cover(path: Path) -> None:
     y += 110
     y = draw_centered_lines(draw, [AUTHOR.upper()], font(58, bold=True), y, graphite, 18, width)
     y += 48
-    draw_centered_lines(draw, ["15 MAY 2026"], font(44), y, graphite, 14, width)
+    draw_centered_lines(draw, [COVER_DATE], font(44), y, graphite, 14, width)
 
     image.save(path, "PNG", optimize=True)
 
@@ -455,12 +533,12 @@ img.cover {
 """.strip()
     (BUILD_DIR / "OEBPS" / "styles" / "book.css").write_text(css + "\n", encoding="utf-8")
 
-    cover_body = '<section class="cover"><img class="cover" src="../images/cover.png" alt="Cover for Magnifica Humanitas" /></section>'
+    cover_body = f'<section class="cover"><img class="cover" src="../images/cover.png" alt="{escape(TITLE)} cover" /></section>'
     (BUILD_DIR / "OEBPS" / "text" / "cover.xhtml").write_text(make_xhtml("Cover", cover_body), encoding="utf-8")
 
     title_body = f"""
 <section class="title-page">
-  <p>ENCYCLICAL LETTER</p>
+  <p>{escape(TITLE_PAGE_LABEL)}</p>
   <h1 class="book-title">{escape(TITLE)}</h1>
   <p class="subtitle">{escape(SUBTITLE)}</p>
   <p>{escape(AUTHOR)}</p>
@@ -474,7 +552,7 @@ img.cover {
     if notes:
         notes_section = f"""
 <section id="notes" epub:type="footnotes">
-  <h1>Notes</h1>
+  <h1>{escape(NOTES_LABEL)}</h1>
   {"\n  ".join(notes)}
 </section>
 """.strip()
@@ -488,7 +566,7 @@ img.cover {
     (BUILD_DIR / "OEBPS" / "text" / "content.xhtml").write_text(make_xhtml(TITLE, content_body), encoding="utf-8")
 
     nav_entries = [
-        {"href": "text/title.xhtml", "text": "Title Page", "level": 1},
+        {"href": "text/title.xhtml", "text": TITLE_PAGE_NAV, "level": 1},
         *[
             {
                 "href": f'text/content.xhtml#{entry["id"]}',
@@ -499,11 +577,11 @@ img.cover {
         ],
     ]
     if notes:
-        nav_entries.append({"href": "text/content.xhtml#notes", "text": "Notes", "level": 1})
+        nav_entries.append({"href": "text/content.xhtml#notes", "text": NOTES_LABEL, "level": 1})
 
     nav_body = f"""
 <nav epub:type="toc" id="toc">
-  <h1>Contents</h1>
+  <h1>{escape(CONTENTS_LABEL)}</h1>
   {render_nav_tree(nav_entries)}
 </nav>
 """.strip()
@@ -602,6 +680,11 @@ def validate_xml() -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description="Build a Magnifica Humanitas EPUB from the Vatican HTML.")
+    parser.add_argument("--lang", choices=sorted(LANGUAGE_CONFIGS), default="en", help="Vatican language version to package")
+    args = parser.parse_args()
+    set_language(args.lang)
+
     if not SOURCE_HTML.exists():
         request = Request(SOURCE_URL, headers={"User-Agent": "magnifica-humanitas-epub/1.0"})
         with urlopen(request, timeout=30) as response:

@@ -1,10 +1,13 @@
 # Magnifica Humanitas EPUB
 
-Clean EPUB version of Pope Leo XIV's *Magnifica Humanitas*, generated from the Holy See's HTML source.
+Clean EPUB versions of Pope Leo XIV's *Magnifica Humanitas*, generated from the Holy See's HTML source.
 
-Source: https://www.vatican.va/content/leo-xiv/en/encyclicals/documents/20260515-magnifica-humanitas.html
+Sources:
 
-The EPUB includes:
+- English: https://www.vatican.va/content/leo-xiv/en/encyclicals/documents/20260515-magnifica-humanitas.html
+- French: https://www.vatican.va/content/leo-xiv/fr/encyclicals/documents/20260515-magnifica-humanitas.html
+
+The EPUBs include:
 
 - cover image
 - metadata
@@ -17,7 +20,10 @@ It validates with `epubcheck` 5.3.0 with no errors or warnings.
 
 ```sh
 python3 -m pip install -r requirements.txt
-python3 build_magnifica_humanitas_epub.py
+python3 build_magnifica_humanitas_epub.py --lang en
+python3 build_magnifica_humanitas_epub.py --lang fr
 epubcheck "Magnifica Humanitas - Pope Leo XIV.epub"
+epubcheck "Magnifica Humanitas - Pape Leon XIV (fr).epub"
 ```
 
+The converter is not bound to English text. It is currently configured for the English and French Vatican pages; adding another language is mostly a matter of adding the Vatican URL and localized metadata.
