@@ -56,6 +56,25 @@ LANGUAGE_CONFIGS = {
         "start_anchors": ("INTRODUCTION",),
         "top_level_pattern": r"^(INTRODUCTION|Chapitre\s+\d+|CONCLUSION)$",
     },
+    "es": {
+        "source_url": "https://www.vatican.va/content/leo-xiv/es/encyclicals/documents/20260515-magnifica-humanitas.html",
+        "source_html": Path("vatican-magnifica-humanitas.es.source.html"),
+        "build_dir": Path("build/magnifica-humanitas-epub-es"),
+        "output_epub": Path("Magnifica Humanitas - Papa Leon XIV (es).epub"),
+        "title": "Magnifica Humanitas",
+        "subtitle": "Sobre la protección de la persona humana en los tiempos de la inteligencia artificial",
+        "author": "Papa León XIV",
+        "publisher": "Libreria Editrice Vaticana",
+        "date": "2026-05-15",
+        "cover_kicker": "Carta encíclica",
+        "cover_date": "15 MAYO 2026",
+        "title_page_label": "CARTA ENCÍCLICA",
+        "title_page_nav": "Título",
+        "contents_label": "Resumen",
+        "notes_label": "Notas",
+        "start_anchors": ("INTRODUCCION",),
+        "top_level_pattern": r"^(INTRODUCCIÓN|Capítulo\s+\d+|CONCLUSIÓN)$",
+    },
 }
 
 SOURCE_URL = ""
